@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Concept Registry — SKOS Vocabulary Browser</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@500;600&family=Inter:wght@400;500;600&display=swap');
+
+  :root {
+    --ink: #16302e;
+    --paper: #ece5d4;
+    --paper-card: #faf7ee;
+    --rule: #c7bc9e;
+    --rule-soft: #ddd4ba;
+    --copper: #a8641f;
+    --copper-soft: #d9a55c;
+    --stamp-red: #9a3b2b;
+    --text: #241f16;
+    --text-muted: #6c6252;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--paper);
+    color: var(--text);
+    margin: 0;
+    padding: 28px 20px 60px;
+  }
+  mark {
+    background: var(--copper-soft);
+    color: #241f16;
+    padding: 0 2px;
+    border-radius: 2px;
+  }
+
+  .rc-shell { max-width: 900px; margin: 0 auto; }
+
+  .rc-eyebrow {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--copper);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .rc-eyebrow::before {
+    content: '';
+    width: 16px;
+    height: 1px;
+    background: var(--copper);
+    display: inline-block;
+  }
+  .rc-title {
+    font-family: 'Fraunces', serif;
+    font-size: 34px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+    margin: 0 0 6px;
+  }
+  .rc-subtitle {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin: 0;
+    max-width: 52ch;
+    line-height: 1.5;
+  }
+  .rc-stats {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11.5px;
+    color: var(--text-muted);
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--rule-soft);
+  }
+
+  .rc-tabs {
+    display: flex;
+    gap: 2px;
+    margin: 22px 0 18px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .rc-tab {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.03em;
+    font-weight: 600;
+    text-transform: uppercase;
+    background: transparent;
+    border: none;
+    padding: 10px 16px 12px;
+    cursor: pointer;
+    color: var(--text-muted);
+    position: relative;
+    top: 1px;
+  }
+  .rc-tab--active { color: var(--ink); border-bottom: 2px solid var(--copper); }
+  .rc-tabpanel { display: none; }
+  .rc-tabpanel--active { display: block; }
+
+  .rc-searchbar { margin-bottom: 18px; }
+  .rc-searchbar__input {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--paper-card);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+  .rc-searchbar__input:focus-within {
+    border-color: var(--copper);
+    box-shadow: 0 0 0 3px rgba(168,100,31,0.12);
+  }
+  .rc-searchbar__icon { color: var(--text-muted); flex-shrink: 0; display: flex; }
+  .rc-searchbar__input input {
+    border: none;
+    outline: none;
+    background: transparent;
+    font-family: 'Inter', sans-serif;
+    font-size: 14.5px;
+    width: 100%;
+    color: var(--text);
+  }
+  .rc-searchbar__input input::placeholder { color: #9c927e; }
+  .rc-searchbar__clear {
+    border: none;
+    background: var(--rule-soft);
+    color: var(--text);
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: none;
+  }
+  .rc-modepills { display: flex; gap: 6px; margin-top: 9px; }
+  .rc-pill {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    padding: 5px 10px;
+    border-radius: 20px;
+    border: 1px solid var(--rule);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .rc-pill--active { background: var(--ink); border-color: var(--ink); color: var(--paper-card); }
+
+  .rc-results { display: flex; flex-direction: column; gap: 10px; }
+  .rc-card {
+    background: var(--paper-card);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .rc-card__head {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 16px 16px 16px 14px;
+    font-family: inherit;
+  }
+  .rc-stamp {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    color: var(--stamp-red);
+    border: 1.4px solid var(--stamp-red);
+    border-radius: 4px;
+    padding: 4px 7px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+    transform: rotate(-1.2deg);
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .rc-card__titleblock { flex: 1; min-width: 0; }
+  .rc-card__title {
+    font-family: 'Fraunces', serif;
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 4px;
+    color: var(--ink);
+  }
+  .rc-card__def { font-size: 13.5px; color: var(--text-muted); line-height: 1.5; margin: 0 0 8px; }
+  .rc-card__meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .rc-tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: var(--ink);
+    color: var(--paper-card);
+    padding: 3px 7px;
+    border-radius: 3px;
+  }
+  .rc-card__count { font-size: 11.5px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 4px; }
+  .rc-card__matchcount { font-size: 11.5px; color: var(--copper); font-weight: 600; }
+  .rc-card__chevron { color: var(--text-muted); flex-shrink: 0; margin-top: 4px; }
+
+  .rc-card__concepts { border-top: 1px solid var(--rule-soft); padding: 4px 16px 10px 14px; display: none; }
+  .rc-card__concepts--open { display: block; }
+  .rc-concept { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px dashed var(--rule-soft); }
+  .rc-concept:last-child { border-bottom: none; }
+  .rc-concept__notation {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--copper);
+    white-space: nowrap;
+    padding-top: 1px;
+    flex-shrink: 0;
+    width: 118px;
+  }
+  .rc-concept__label { font-size: 13.5px; font-weight: 600; color: var(--ink); margin-bottom: 2px; }
+  .rc-concept__def { font-size: 13px; color: var(--text-muted); line-height: 1.45; }
+
+  .rc-empty {
+    text-align: center;
+    padding: 50px 20px;
+    color: var(--text-muted);
+    font-size: 13.5px;
+    border: 1px dashed var(--rule);
+    border-radius: 8px;
+  }
+
+  .rc-catalog-layout { display: flex; gap: 22px; align-items: flex-start; }
+  .rc-rail { width: 190px; flex-shrink: 0; display: flex; flex-direction: column; gap: 4px; }
+  .rc-rail__item {
+    text-align: left;
+    background: transparent;
+    border: none;
+    border-left: 3px solid transparent;
+    padding: 9px 10px;
+    cursor: pointer;
+    border-radius: 0 5px 5px 0;
+    font-family: inherit;
+  }
+  .rc-rail__item--active { background: var(--paper-card); border-left-color: var(--copper); }
+  .rc-rail__name { display: block; font-size: 13px; font-weight: 600; color: var(--ink); }
+  .rc-rail__meta {
+    display: block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+  .rc-catalog-main { flex: 1; min-width: 0; }
+  .rc-catalog-heading { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
+  .rc-catalog-heading h2 { font-family: 'Fraunces', serif; font-size: 20px; font-weight: 600; color: var(--ink); margin: 0; }
+  .rc-catalog-heading span { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text-muted); }
+
+  @media (max-width: 720px) {
+    .rc-catalog-layout { flex-direction: column; }
+    .rc-rail { width: 100%; flex-direction: row; overflow-x: auto; }
+    .rc-rail__item { border-left: none; border-bottom: 3px solid transparent; flex-shrink: 0; }
+    .rc-rail__item--active { border-left-color: transparent; border-bottom-color: var(--copper); }
+  }
+</style>
+</head>
+<body>
+
+<div class="rc-shell">
+  <header>
+    <div class="rc-eyebrow">SKOS Vocabulary Browser</div>
+    <h1 class="rc-title">Concept Registry</h1>
+    <p class="rc-subtitle">
+      Search and browse concept schemes by notation or definition, across every catalog
+      in the domain or within one at a time.
+    </p>
+    <div class="rc-stats" id="rc-stats"></div>
+  </header>
+
+  <nav class="rc-tabs">
+    <button class="rc-tab rc-tab--active" data-tab="all">All Catalogs</button>
+    <button class="rc-tab" data-tab="byCatalog">By Catalog</button>
+  </nav>
+
+  <!-- ALL CATALOGS TAB -->
+  <section class="rc-tabpanel rc-tabpanel--active" id="panel-all">
+    <div class="rc-searchbar">
+      <div class="rc-searchbar__input">
+        <span class="rc-searchbar__icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        </span>
+        <input type="text" id="all-search" placeholder="Search all concept schemes by notation or definition…" />
+        <button class="rc-searchbar__clear" id="all-clear">×</button>
+      </div>
+      <div class="rc-modepills" id="all-modes">
+        <button class="rc-pill rc-pill--active" data-mode="all">All fields</button>
+        <button class="rc-pill" data-mode="notation">Notation</button>
+        <button class="rc-pill" data-mode="definition">Definition</button>
+      </div>
+    </div>
+    <div class="rc-results" id="all-results"></div>
+  </section>
+
+  <!-- BY CATALOG TAB -->
+  <section class="rc-tabpanel" id="panel-byCatalog">
+    <div class="rc-catalog-layout">
+      <div class="rc-rail" id="catalog-rail"></div>
+      <div class="rc-catalog-main">
+        <div class="rc-catalog-heading">
+          <h2 id="catalog-heading-name"></h2>
+          <span id="catalog-heading-count"></span>
+        </div>
+        <div class="rc-searchbar">
+          <div class="rc-searchbar__input">
+            <span class="rc-searchbar__icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            </span>
+            <input type="text" id="cat-search" placeholder="Search within this catalog by notation or definition…" />
+            <button class="rc-searchbar__clear" id="cat-clear">×</button>
+          </div>
+          <div class="rc-modepills" id="cat-modes">
+            <button class="rc-pill rc-pill--active" data-mode="all">All fields</button>
+            <button class="rc-pill" data-mode="notation">Notation</button>
+            <button class="rc-pill" data-mode="definition">Definition</button>
+          </div>
+        </div>
+        <div class="rc-results" id="cat-results"></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Mock data
+// ---------------------------------------------------------------------------
+const CATALOGS = [
+  {
+    id: "finance", name: "Finance & Regulatory", steward: "Group Compliance",
+    schemes: [
+      { id: "fin-instr", notation: "FIN-INSTR", title: "Financial Instrument Types",
+        definition: "Classification of tradable financial instruments used in regulatory reporting.",
+        concepts: [
+          { notation: "FIN-INSTR-001", prefLabel: "Equity Security", definition: "A financial instrument representing ownership interest in an entity." },
+          { notation: "FIN-INSTR-002", prefLabel: "Debt Instrument", definition: "A financial instrument representing a contractual obligation to repay borrowed funds." },
+          { notation: "FIN-INSTR-003", prefLabel: "Derivative Contract", definition: "A financial instrument whose value is derived from an underlying asset or benchmark." }
+        ]},
+      { id: "fin-juris", notation: "FIN-JURIS", title: "Regulatory Jurisdiction Codes",
+        definition: "Controlled vocabulary of regulatory jurisdictions referenced in compliance filings.",
+        concepts: [
+          { notation: "FIN-JURIS-EU", prefLabel: "European Union", definition: "Jurisdiction covering member states under EU financial regulation." },
+          { notation: "FIN-JURIS-UK", prefLabel: "United Kingdom", definition: "Jurisdiction governed by the Financial Conduct Authority." },
+          { notation: "FIN-JURIS-US", prefLabel: "United States", definition: "Jurisdiction governed by the Securities and Exchange Commission." }
+        ]}
+    ]
+  },
+  {
+    id: "health", name: "Clinical & Health", steward: "Health Informatics",
+    schemes: [
+      { id: "cln-diag", notation: "CLN-DIAG", title: "Diagnostic Category Set",
+        definition: "High-level grouping of clinical diagnoses used for case mix classification.",
+        concepts: [
+          { notation: "CLN-DIAG-CARD", prefLabel: "Cardiovascular Disorder", definition: "A condition affecting the heart or blood vessels." },
+          { notation: "CLN-DIAG-RESP", prefLabel: "Respiratory Disorder", definition: "A condition affecting the lungs or airway." },
+          { notation: "CLN-DIAG-ENDO", prefLabel: "Endocrine Disorder", definition: "A condition arising from hormone-producing gland dysfunction." }
+        ]},
+      { id: "cln-setting", notation: "CLN-SETTING", title: "Care Setting Types",
+        definition: "Vocabulary describing the physical or organizational setting in which care is delivered.",
+        concepts: [
+          { notation: "CLN-SETTING-INP", prefLabel: "Inpatient", definition: "Care delivered to a patient admitted overnight to a hospital facility." },
+          { notation: "CLN-SETTING-OUT", prefLabel: "Outpatient", definition: "Care delivered without an overnight hospital stay." }
+        ]}
+    ]
+  },
+  {
+    id: "geo", name: "Geospatial", steward: "Spatial Data Office",
+    schemes: [
+      { id: "geo-admin", notation: "GEO-ADMIN", title: "Administrative Boundary Levels",
+        definition: "Hierarchy of administrative subdivisions used for geospatial referencing.",
+        concepts: [
+          { notation: "GEO-ADMIN-NAT", prefLabel: "Nation", definition: "The highest-level sovereign administrative boundary." },
+          { notation: "GEO-ADMIN-REG", prefLabel: "Region", definition: "A sub-national administrative division, such as a state or province." },
+          { notation: "GEO-ADMIN-MUN", prefLabel: "Municipality", definition: "A local administrative division governing a city or town." }
+        ]},
+      { id: "geo-land", notation: "GEO-LAND", title: "Land Use Classification",
+        definition: "Categorization of land parcels by primary use, used in planning datasets.",
+        concepts: [
+          { notation: "GEO-LAND-RES", prefLabel: "Residential", definition: "Land primarily used for housing." },
+          { notation: "GEO-LAND-COM", prefLabel: "Commercial", definition: "Land primarily used for business and trade activity." }
+        ]}
+    ]
+  },
+  {
+    id: "org", name: "Organizational", steward: "People Systems",
+    schemes: [
+      { id: "org-emp", notation: "ORG-EMP", title: "Employment Status Types",
+        definition: "Vocabulary of employment status categories used across HR systems.",
+        concepts: [
+          { notation: "ORG-EMP-FT", prefLabel: "Full-Time", definition: "An employment status requiring a standard full working week." },
+          { notation: "ORG-EMP-PT", prefLabel: "Part-Time", definition: "An employment status requiring fewer than standard full-time hours." },
+          { notation: "ORG-EMP-CON", prefLabel: "Contractor", definition: "An individual engaged under a fixed-term or project-based contract." }
+        ]}
+    ]
+  }
+];
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+const state = {
+  tab: "all",
+  all: { term: "", mode: "all", expanded: {} },
+  cat: { term: "", mode: "all", selected: CATALOGS[0].id, expanded: {} }
+};
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function norm(s) { return (s || "").toLowerCase(); }
+function esc(s) {
+  return (s || "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function highlight(text, term) {
+  const safe = esc(text);
+  if (!term || !term.trim()) return safe;
+  const t = term.trim();
+  const idx = norm(text).indexOf(norm(t));
+  if (idx === -1) return safe;
+  const before = esc(text.slice(0, idx));
+  const match = esc(text.slice(idx, idx + t.length));
+  const after = esc(text.slice(idx + t.length));
+  return `${before}<mark>${match}</mark>${after}`;
+}
+function schemeFieldMatches(scheme, term, mode) {
+  const t = norm(term);
+  if (!t) return true;
+  if (mode === "notation") return norm(scheme.notation).includes(t);
+  if (mode === "definition") return norm(scheme.definition).includes(t);
+  return norm(scheme.notation).includes(t) || norm(scheme.definition).includes(t) || norm(scheme.title).includes(t);
+}
+function conceptMatches(c, term, mode) {
+  const t = norm(term);
+  if (!t) return false;
+  if (mode === "notation") return norm(c.notation).includes(t);
+  if (mode === "definition") return norm(c.definition).includes(t);
+  return norm(c.notation).includes(t) || norm(c.definition).includes(t) || norm(c.prefLabel).includes(t);
+}
+
+// ---------------------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------------------
+function conceptRowHTML(concept, term) {
+  return `
+    <div class="rc-concept">
+      <span class="rc-concept__notation">${highlight(concept.notation, term)}</span>
+      <div>
+        <div class="rc-concept__label">${highlight(concept.prefLabel, term)}</div>
+        <div class="rc-concept__def">${highlight(concept.definition, term)}</div>
+      </div>
+    </div>`;
+}
+
+function schemeCardHTML(scheme, opts) {
+  const { catalogName, term, mode, expandedMap, forceShow } = opts;
+  const matchedConcepts = scheme.concepts.filter(c => conceptMatches(c, term, mode));
+  const isExpanded = !!expandedMap[scheme.id];
+  const showList = isExpanded || forceShow;
+  const conceptsToRender = (term && matchedConcepts.length) ? matchedConcepts : scheme.concepts;
+
+  return `
+    <article class="rc-card" data-scheme-id="${scheme.id}">
+      <button class="rc-card__head" data-toggle="${scheme.id}">
+        <span class="rc-stamp">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line><line x1="10" y1="3" x2="8" y2="21"></line><line x1="16" y1="3" x2="14" y2="21"></line></svg>
+          ${highlight(scheme.notation, mode !== "definition" ? term : "")}
+        </span>
+        <div class="rc-card__titleblock">
+          <h3 class="rc-card__title">${highlight(scheme.title, mode === "all" ? term : "")}</h3>
+          <p class="rc-card__def">${highlight(scheme.definition, mode !== "notation" ? term : "")}</p>
+          <div class="rc-card__meta">
+            ${catalogName ? `<span class="rc-tag">${esc(catalogName)}</span>` : ""}
+            <span class="rc-card__count">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+              ${scheme.concepts.length} concepts
+            </span>
+            ${term && matchedConcepts.length > 0 ? `<span class="rc-card__matchcount">${matchedConcepts.length} matching concept${matchedConcepts.length > 1 ? "s" : ""}</span>` : ""}
+          </div>
+        </div>
+        <span class="rc-card__chevron">${showList
+          ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>'
+          : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>'}</span>
+      </button>
+      <div class="rc-card__concepts ${showList ? "rc-card__concepts--open" : ""}">
+        ${conceptsToRender.map(c => conceptRowHTML(c, term)).join("")}
+      </div>
+    </article>`;
+}
+
+function renderStats() {
+  const totalSchemes = CATALOGS.reduce((n, c) => n + c.schemes.length, 0);
+  const totalConcepts = CATALOGS.reduce((n, c) => n + c.schemes.reduce((m, s) => m + s.concepts.length, 0), 0);
+  document.getElementById("rc-stats").textContent =
+    `${CATALOGS.length} catalogs · ${totalSchemes} concept schemes · ${totalConcepts} concepts indexed`;
+}
+
+function renderAll() {
+  const { term, mode, expanded } = state.all;
+  const results = [];
+  CATALOGS.forEach(cat => {
+    cat.schemes.forEach(scheme => {
+      const schemeHit = schemeFieldMatches(scheme, term, mode);
+      const conceptHit = term ? scheme.concepts.some(c => conceptMatches(c, term, mode)) : false;
+      if (!term || schemeHit || conceptHit) {
+        results.push({ scheme, catalogName: cat.name, conceptHit });
+      }
+    });
+  });
+
+  const container = document.getElementById("all-results");
+  if (results.length === 0) {
+    container.innerHTML = `<div class="rc-empty">No concept schemes match "${esc(term)}". Try a different notation or a broader term.</div>`;
+    return;
+  }
+  container.innerHTML = results.map(r => schemeCardHTML(r.scheme, {
+    catalogName: r.catalogName, term, mode, expandedMap: expanded, forceShow: !!term && r.conceptHit
+  })).join("");
+
+  container.querySelectorAll("[data-toggle]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-toggle");
+      state.all.expanded[id] = !state.all.expanded[id];
+      renderAll();
+    });
+  });
+}
+
+function renderCatalogRail() {
+  const rail = document.getElementById("catalog-rail");
+  rail.innerHTML = CATALOGS.map(cat => `
+    <button class="rc-rail__item ${state.cat.selected === cat.id ? "rc-rail__item--active" : ""}" data-catalog="${cat.id}">
+      <span class="rc-rail__name">${esc(cat.name)}</span>
+      <span class="rc-rail__meta">${cat.schemes.length} schemes · ${esc(cat.steward)}</span>
+    </button>`).join("");
+
+  rail.querySelectorAll("[data-catalog]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.cat.selected = btn.getAttribute("data-catalog");
+      state.cat.term = "";
+      document.getElementById("cat-search").value = "";
+      renderCatalogRail();
+      renderCatalogMain();
+    });
+  });
+}
+
+function renderCatalogMain() {
+  const activeCatalog = CATALOGS.find(c => c.id === state.cat.selected);
+  document.getElementById("catalog-heading-name").textContent = activeCatalog.name;
+  document.getElementById("catalog-heading-count").textContent = `${activeCatalog.schemes.length} concept schemes`;
+
+  const { term, mode, expanded } = state.cat;
+  const results = activeCatalog.schemes.filter(scheme => {
+    const schemeHit = schemeFieldMatches(scheme, term, mode);
+    const conceptHit = term ? scheme.concepts.some(c => conceptMatches(c, term, mode)) : false;
+    return !term || schemeHit || conceptHit;
+  });
+
+  const container = document.getElementById("cat-results");
+  if (results.length === 0) {
+    container.innerHTML = `<div class="rc-empty">No concept schemes in ${esc(activeCatalog.name)} match "${esc(term)}".</div>`;
+    return;
+  }
+  container.innerHTML = results.map(scheme => {
+    const conceptHit = term ? scheme.concepts.some(c => conceptMatches(c, term, mode)) : false;
+    return schemeCardHTML(scheme, { term, mode, expandedMap: expanded, forceShow: !!term && conceptHit });
+  }).join("");
+
+  container.querySelectorAll("[data-toggle]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-toggle");
+      state.cat.expanded[id] = !state.cat.expanded[id];
+      renderCatalogMain();
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Wiring
+// ---------------------------------------------------------------------------
+document.querySelectorAll(".rc-tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".rc-tab").forEach(t => t.classList.remove("rc-tab--active"));
+    document.querySelectorAll(".rc-tabpanel").forEach(p => p.classList.remove("rc-tabpanel--active"));
+    tab.classList.add("rc-tab--active");
+    const target = tab.getAttribute("data-tab");
+    document.getElementById(`panel-${target}`).classList.add("rc-tabpanel--active");
+  });
+});
+
+const allSearch = document.getElementById("all-search");
+const allClear = document.getElementById("all-clear");
+allSearch.addEventListener("input", () => {
+  state.all.term = allSearch.value;
+  allClear.style.display = allSearch.value ? "block" : "none";
+  renderAll();
+});
+allClear.addEventListener("click", () => {
+  allSearch.value = "";
+  state.all.term = "";
+  allClear.style.display = "none";
+  renderAll();
+});
+document.getElementById("all-modes").querySelectorAll(".rc-pill").forEach(pill => {
+  pill.addEventListener("click", () => {
+    document.getElementById("all-modes").querySelectorAll(".rc-pill").forEach(p => p.classList.remove("rc-pill--active"));
+    pill.classList.add("rc-pill--active");
+    state.all.mode = pill.getAttribute("data-mode");
+    renderAll();
+  });
+});
+
+const catSearch = document.getElementById("cat-search");
+const catClear = document.getElementById("cat-clear");
+catSearch.addEventListener("input", () => {
+  state.cat.term = catSearch.value;
+  catClear.style.display = catSearch.value ? "block" : "none";
+  renderCatalogMain();
+});
+catClear.addEventListener("click", () => {
+  catSearch.value = "";
+  state.cat.term = "";
+  catClear.style.display = "none";
+  renderCatalogMain();
+});
+document.getElementById("cat-modes").querySelectorAll(".rc-pill").forEach(pill => {
+  pill.addEventListener("click", () => {
+    document.getElementById("cat-modes").querySelectorAll(".rc-pill").forEach(p => p.classList.remove("rc-pill--active"));
+    pill.classList.add("rc-pill--active");
+    state.cat.mode = pill.getAttribute("data-mode");
+    renderCatalogMain();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+renderStats();
+renderAll();
+renderCatalogRail();
+renderCatalogMain();
+</script>
+</body>
+</html>
