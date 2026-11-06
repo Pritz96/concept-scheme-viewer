@@ -57,6 +57,7 @@ h1 { margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -0.01em; text
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn.primary { color: #06212b; } }
 .btn:hover, .zoom button:hover, select:hover { border-color: var(--accent); }
 select { max-width: 100%; min-width: 0; }
+.scheme { font-weight: 600; font-size: 13px; color: var(--accent); background: var(--accent-soft); border-radius: 6px; padding: 7px 12px; line-height: 1.2; overflow-wrap: anywhere; min-width: 0; }
 .zoom { display: flex; }
 .zoom button { border-radius: 0; margin-left: -1px; padding: 7px 11px; }
 .zoom button:first-child { border-radius: 6px 0 0 6px; margin-left: 0; }
@@ -99,11 +100,9 @@ dd p { margin: 0 0 4px; }
 .hint { color: var(--muted); margin: 0; }
 /* diagram */
 .edge { fill: none; stroke: var(--line-strong); stroke-width: 1.4; }
-.edge.extra { stroke: var(--multi); stroke-dasharray: 5 4; }
 .has-sel .edge { opacity: 0.22; }
 .has-sel .edge.anc, .has-sel .edge.kid { opacity: 1; }
 .edge.anc { stroke: var(--accent); stroke-width: 2.6; }
-.edge.anc.extra { stroke: var(--multi); }
 .edge.kid { stroke: var(--accent); stroke-width: 1.8; }
 .node { cursor: pointer; outline: none; }
 .node rect.box { fill: var(--node); stroke: var(--line-strong); stroke-width: 1.2; }
@@ -143,8 +142,7 @@ body{margin:0}
   <div class="tools">
     <label class="btn primary" for="file">Import .ttl</label>
     <input type="file" id="file" accept=".ttl,.turtle,text/turtle,.txt" hidden>
-    <select id="scheme" aria-label="Concept scheme"></select>
-    <button class="btn" id="sample" type="button">Load sample</button>
+    <span class="scheme" id="schemeName" hidden></span>
     <div class="zoom" role="group" aria-label="Zoom">
       <button type="button" id="zout" aria-label="Zoom out">&minus;</button>
       <button type="button" id="zfit">Fit</button>
@@ -176,57 +174,6 @@ body{margin:0}
   const RDF_TYPE = NS.rdf + 'type';
   const $ = id => document.getElementById(id);
   const W = 214, H = 54, CG = 78, RG = 14, PAD = 24;
-
-  const SAMPLE = `@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
-@prefix dct: <http://purl.org/dc/terms/> .
-@prefix ex: <https://example.org/transport/> .
-
-ex:scheme a skos:ConceptScheme ;
-  dct:title "Transport Modes"@en ;
-  skos:hasTopConcept ex:land .
-
-ex:land a skos:Concept ; skos:inScheme ex:scheme ;
-  skos:prefLabel "Land transport"@en ; skos:altLabel "Overland travel"@en ;
-  skos:notation "T1" ;
-  skos:definition "Movement of people and goods over the ground surface."@en .
-ex:water a skos:Concept ; skos:inScheme ex:scheme ;
-  skos:prefLabel "Water transport"@en ; skos:altLabel "Maritime travel"@en ; skos:notation "T2" .
-ex:air a skos:Concept ; skos:inScheme ex:scheme ;
-  skos:prefLabel "Air transport"@en ; skos:altLabel "Aviation"@en ; skos:notation "T3" .
-
-ex:road a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:land ;
-  skos:prefLabel "Road transport"@en ; skos:altLabel "Highway travel"@en ; skos:notation "T1.1" ;
-  skos:narrower ex:trams .
-ex:rail a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:land ;
-  skos:prefLabel "Rail transport"@en ; skos:altLabel "Railways"@en ; skos:notation "T1.2" .
-ex:active a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:land ;
-  skos:prefLabel "Active travel"@en ; skos:altLabel "Non-motorised travel"@en ; skos:notation "T1.3" ;
-  skos:scopeNote "Travel powered by the traveller: walking, cycling and similar."@en .
-
-ex:cars a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:road ;
-  skos:prefLabel "Cars"@en ; skos:altLabel "Automobiles"@en ; skos:notation "T1.1.1" .
-ex:buses a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:road ;
-  skos:prefLabel "Buses"@en ; skos:altLabel "Coaches"@en ; skos:notation "T1.1.2" ;
-  skos:related ex:trams .
-ex:cycling a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:road, ex:active ;
-  skos:prefLabel "Cycling"@en ; skos:altLabel "Bicycles"@en ; skos:notation "T1.1.3" ;
-  skos:scopeNote "Has two broader concepts: it is both a road use and a form of active travel."@en .
-ex:trams a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:rail ;
-  skos:prefLabel "Trams"@en ; skos:altLabel "Streetcars"@en ; skos:notation "T1.2.1" .
-ex:metro a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:rail ;
-  skos:prefLabel "Underground rail"@en ; skos:altLabel "Metro"@en, "Subway"@en ; skos:notation "T1.2.2" .
-ex:walking a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:active ;
-  skos:prefLabel "Walking"@en ; skos:altLabel "Pedestrian travel"@en ; skos:notation "T1.3.1" .
-
-ex:ferries a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:water ;
-  skos:prefLabel "Ferries"@en ; skos:altLabel "Passenger boats"@en ; skos:notation "T2.1" .
-ex:freight a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:water ;
-  skos:prefLabel "Freight shipping"@en ; skos:altLabel "Cargo vessels"@en ; skos:notation "T2.2" .
-ex:flights a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:air ;
-  skos:prefLabel "Scheduled flights"@en ; skos:altLabel "Airline services"@en ; skos:notation "T3.1" .
-ex:heli a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:air ;
-  skos:prefLabel "Helicopters"@en ; skos:altLabel "Rotorcraft"@en ; skos:notation "T3.2" .
-`;
 
   let M = null, V = null, sel = null, zoom = 1, prefixes = {};
 
@@ -313,13 +260,7 @@ ex:heli a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:air ;
 
   /* ---------- view model + layout ---------- */
   function computeView() {
-    const sch = $('scheme').value;
-    let ids = [...M.concepts];
-    if (sch !== '*') {
-      const f = ids.filter(i => M.inScheme.get(i) && M.inScheme.get(i).has(sch));
-      if (f.length) ids = f;
-    }
-    ids.sort(cmp);
+    const ids = [...M.concepts].sort(cmp);
     const set = new Set(ids);
     const parents = new Map(), kids = new Map();
     ids.forEach(i => { parents.set(i, []); kids.set(i, []); });
@@ -329,6 +270,18 @@ ex:heli a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:air ;
     }
     ids.forEach(i => { parents.get(i).sort(cmp); kids.get(i).sort(cmp); });
     const tops = ids.filter(i => !parents.get(i).length);
+
+    // Number of distinct routes from each concept up to a top concept.
+    const routes = new Map(), rg = new Set();
+    const rc = n => {
+      if (routes.has(n)) return routes.get(n);
+      if (rg.has(n)) return 0;
+      rg.add(n);
+      const ps = parents.get(n);
+      const v = ps.length ? ps.reduce((a, p) => a + rc(p), 0) : 1;
+      rg.delete(n); routes.set(n, v); return v;
+    };
+    ids.forEach(rc);
 
     const rank = new Map(), guard = new Set();
     const rk = n => {
@@ -362,7 +315,7 @@ ex:heli a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:air ;
       pos.set(n, { x, y });
       maxX = Math.max(maxX, x + W); maxY = Math.max(maxY, y + H);
     });
-    return { ids, set, parents, kids, tops, primary, pos, w: maxX + PAD, h: maxY + PAD };
+    return { ids, set, parents, kids, tops, primary, routes, pos, w: maxX + PAD, h: maxY + PAD };
   }
 
   /* ---------- diagram ---------- */
@@ -383,7 +336,7 @@ ex:heli a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:air ;
         const x1 = a.x + W, y1 = a.y + H / 2, x2 = b.x, y2 = b.y + H / 2;
         const dx = Math.max(30, (x2 - x1) / 2);
         eg.append(sv('path', {
-          class: 'edge' + (V.parents.get(c).length > 1 ? ' extra' : ''),
+          class: 'edge',
           d: `M${x1} ${y1} C${x1 + dx} ${y1} ${x2 - dx} ${y2} ${x2} ${y2}`,
           'data-p': p, 'data-c': c
         }));
@@ -391,14 +344,14 @@ ex:heli a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:air ;
     }
     for (const id of V.ids) {
       const { x, y } = V.pos.get(id);
-      const np = V.parents.get(id).length;
+      const np = V.routes.get(id);
       const alts = altLabels(id), nt = notation(id);
       const l1 = nt || prefLabel(id);
       let l2 = alts.length ? alts[0] + (alts.length > 1 ? '  +' + (alts.length - 1) : '') : (nt ? prefLabel(id) : '');
       const g = sv('g', {
         class: 'node' + (V.tops.includes(id) ? ' top' : ''), transform: `translate(${x} ${y})`,
         'data-id': id, tabindex: '0', role: 'button',
-        'aria-label': `${l1}${l2 ? ', ' + l2 : ''}${np > 1 ? ', ' + np + ' parents' : ''}`
+        'aria-label': `${l1}${l2 ? ', ' + l2 : ''}${np > 1 ? ', ' + np + ' routes to the top' : ''}`
       });
       g.append(sv('title', {}, prefLabel(id) + (nt ? ' (' + nt + ')' : '')));
       g.append(sv('rect', { class: 'box', width: W, height: H, rx: 6 }));
@@ -410,11 +363,11 @@ ex:heli a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:air ;
       }
       ng.append(g);
     }
-    svg.addEventListener('click', e => { const n = e.target.closest('.node'); if (n) select(n.getAttribute('data-id')); });
+    svg.addEventListener('click', e => { const n = e.target.closest('.node'); if (n) toggle(n.getAttribute('data-id')); });
     svg.addEventListener('keydown', e => {
       if (e.key !== 'Enter' && e.key !== ' ') return;
       const n = e.target.closest && e.target.closest('.node');
-      if (n) { e.preventDefault(); select(n.getAttribute('data-id')); }
+      if (n) { e.preventDefault(); toggle(n.getAttribute('data-id')); }
     });
     stage.append(svg);
     applyZoom();
@@ -459,9 +412,15 @@ ex:heli a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:air ;
     });
     svg.querySelectorAll('.edge').forEach(e => {
       const p = e.getAttribute('data-p'), c = e.getAttribute('data-c');
-      e.classList.toggle('anc', active && (c === sel || anc.has(c)) && anc.has(p));
+      const onRoute = active && (c === sel || anc.has(c)) && anc.has(p);
+      e.classList.toggle('anc', onRoute);
       e.classList.toggle('kid', active && p === sel);
     });
+  }
+
+  // Clicking the selected box again clears the selection.
+  function toggle(id) {
+    if (id === sel) { sel = null; paintSelection(); renderPanel(); } else select(id);
   }
 
   function select(id, scroll) {
@@ -509,6 +468,10 @@ ex:heli a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:air ;
   function renderPanel() {
     const P = $('panel');
     P.textContent = '';
+    if (!M) {
+      P.append(h('p', { class: 'hint' }, 'Concept details appear here once a file is loaded.'));
+      return;
+    }
     if (!sel || !M.concepts.has(sel)) {
       P.append(h('p', { class: 'hint' }, 'Select a concept in the diagram to see its full record, its broader and narrower concepts and every route up to a top concept.'));
       return;
@@ -524,11 +487,12 @@ ex:heli a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:air ;
     const flags = h('div', { class: 'flags' });
     if (isTop) flags.append(h('span', { class: 'flag top' }, M.declaredTop.has(id) ? 'Top concept (declared)' : 'Top concept (inferred)'));
     else if (M.declaredTop.has(id)) flags.append(h('span', { class: 'flag' }, 'Declared top concept, but has a broader concept'));
-    if (ps.length > 1) flags.append(h('span', { class: 'flag multi' }, ps.length + ' parents'));
+    const rts = inV ? V.routes.get(id) : 1;
+    if (rts > 1) flags.append(h('span', { class: 'flag multi' }, rts + ' routes to the top'));
     if (flags.children.length) P.append(flags);
 
-    if (ps.length > 1) {
-      P.append(h('div', { class: 'callout' }, `This concept sits under ${ps.length} broader concepts, so it is reachable by ${ps.length} routes. The diagram highlights each route, and every link into this concept is drawn dashed.`));
+    if (rts > 1) {
+      P.append(h('div', { class: 'callout' }, `This concept has ${rts} routes to the top. The diagram highlights each one.`));
     }
 
     const hier = h('div', { class: 'sec' }, h('h3', {}, 'Hierarchy'));
@@ -576,18 +540,26 @@ ex:heli a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:air ;
   }
 
   /* ---------- scheme list, stats, legend ---------- */
-  function fillSchemes(keep) {
-    const s = $('scheme');
-    s.textContent = '';
-    s.append(h('option', { value: '*' }, 'All concepts'));
-    [...M.schemes].forEach(id => s.append(h('option', { value: id }, 'Scheme: ' + prefLabel(id))));
-    s.value = keep && [...s.options].some(o => o.value === keep) ? keep : '*';
-    if (M.schemes.size === 1 && !keep) s.value = [...M.schemes][0];
+  function showScheme() {
+    const el = $('schemeName');
+    const names = [...M.schemes].map(prefLabel);
+    el.textContent = names.join(' \u00B7 ');
+    el.hidden = !names.length;
+  }
+  function showEmpty() {
+    M = null; V = null; sel = null;
+    $('stats').textContent = '';
+    $('schemeName').hidden = true;
+    const st = $('stage');
+    st.textContent = '';
+    st.append(h('div', { class: 'empty' }, h('strong', {}, 'Import a SKOS file to begin'),
+      'Choose a Turtle (.ttl) file with the Import button, or drop one onto this page. The hierarchy is built from skos:broader and skos:narrower, and the top concepts are worked out for you.'));
+    renderPanel();
   }
   function stats() {
-    const multi = V.ids.filter(i => V.parents.get(i).length > 1).length;
+    const multi = V.ids.filter(i => V.routes.get(i) > 1).length;
     $('stats').textContent = V.ids.length + ' concepts · ' + V.tops.length + ' top concept' + (V.tops.length === 1 ? '' : 's') +
-      ' (inferred) · ' + multi + ' with several parents';
+      ' (inferred) · ' + multi + ' with several routes to the top';
   }
   function legend() {
     const L = $('legend');
@@ -595,9 +567,8 @@ ex:heli a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:air ;
     const sw = (kids, label) => h('span', {}, sv('svg', { width: 26, height: 16, viewBox: '0 0 26 16' }, ...kids), label);
     L.append(
       sw([sv('rect', { x: 1, y: 2, width: 24, height: 12, rx: 3, fill: 'var(--top-soft)', stroke: 'var(--top)', 'stroke-width': 1.4 })], 'Top concept'),
-      sw([sv('circle', { cx: 13, cy: 8, r: 7, fill: 'var(--multi)' })], 'Badge = number of parents'),
-      sw([sv('path', { d: 'M1 8 H25', stroke: 'var(--line-strong)', 'stroke-width': 1.6 })], 'Only one route to the concept'),
-      sw([sv('path', { d: 'M1 8 H25', stroke: 'var(--multi)', 'stroke-width': 1.6, 'stroke-dasharray': '5 4' })], 'Several routes (concept has multiple parents)')
+      sw([sv('circle', { cx: 13, cy: 8, r: 7, fill: 'var(--multi)' })], 'Badge = number of routes to the top'),
+      sw([sv('path', { d: 'M1 8 H25', stroke: 'var(--line-strong)', 'stroke-width': 1.6 })], 'Broader / narrower link')
     );
   }
 
@@ -616,7 +587,7 @@ ex:heli a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:air ;
     }
     showError('');
     sel = null; zoom = 1;
-    fillSchemes();
+    showScheme();
     refresh();
   }
   function refresh() {
@@ -635,8 +606,6 @@ ex:heli a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:air ;
   }
 
   $('file').addEventListener('change', e => { readFile(e.target.files[0]); e.target.value = ''; });
-  $('sample').addEventListener('click', () => load(SAMPLE, 'the sample'));
-  $('scheme').addEventListener('change', () => { sel = null; refresh(); });
   $('zin').addEventListener('click', () => setZoom(zoom + 0.15));
   $('zout').addEventListener('click', () => setZoom(zoom - 0.15));
   $('zfit').addEventListener('click', () => V && fit());
@@ -650,7 +619,7 @@ ex:heli a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:air ;
   });
 
   legend();
-  load(SAMPLE, 'the sample');
+  showEmpty();
 })();
 </script>
 </body>
