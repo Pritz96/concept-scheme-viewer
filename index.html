@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SKOS Hierarchy Viewer</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: toolbar on top, hierarchy diagram (columns = depth) on the left, concept detail panel on the right; stacked on phones. */
+:root {
+  --bg: #eef1f3; --panel: #ffffff; --ink: #15222c; --muted: #5b6b77;
+  --line: #cfd8de; --line-strong: #9fb1bd; --node: #ffffff;
+  --accent: #0a6c8c; --accent-soft: #d7edf4;
+  --multi: #b4430c; --multi-soft: #fbe4d6;
+  --top: #2f7d5a; --top-soft: #dff0e7;
+  --err-bg: #fde8e8; --err-ink: #8a1c1c;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e161c; --panel: #151f27; --ink: #e4ecf1; --muted: #93a5b2;
+    --line: #2a3a46; --line-strong: #4a6272; --node: #192630;
+    --accent: #4fb8d9; --accent-soft: #123341;
+    --multi: #ff9a62; --multi-soft: #3d2415;
+    --top: #5fc596; --top-soft: #15332a;
+    --err-bg: #3b1a1a; --err-ink: #ffb4b4; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e161c; --panel: #151f27; --ink: #e4ecf1; --muted: #93a5b2;
+  --line: #2a3a46; --line-strong: #4a6272; --node: #192630;
+  --accent: #4fb8d9; --accent-soft: #123341;
+  --multi: #ff9a62; --multi-soft: #3d2415;
+  --top: #5fc596; --top-soft: #15332a;
+  --err-bg: #3b1a1a; --err-ink: #ffb4b4; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 14px; line-height: 1.45;
+  padding-block: 16px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; margin-bottom: 14px; }
+.brand { min-width: 0; }
+h1 { margin: 0; font-size: 19px; font-weight: 600; letter-spacing: -0.01em; text-wrap: balance; }
+.muted { color: var(--muted); }
+#stats { margin: 2px 0 0; font-size: 13px; }
+.tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.btn, select, .zoom button {
+  font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line-strong);
+  border-radius: 6px; padding: 7px 12px; cursor: pointer; line-height: 1.2;
+}
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 500; }
+:root[data-theme="dark"] .btn.primary { color: #06212b; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn.primary { color: #06212b; } }
+.btn:hover, .zoom button:hover, select:hover { border-color: var(--accent); }
+select { max-width: 100%; min-width: 0; }
+.zoom { display: flex; }
+.zoom button { border-radius: 0; margin-left: -1px; padding: 7px 11px; }
+.zoom button:first-child { border-radius: 6px 0 0 6px; margin-left: 0; }
+.zoom button:last-child { border-radius: 0 6px 6px 0; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.err { background: var(--err-bg); color: var(--err-ink); border-radius: 6px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 14px; align-items: start; }
+.canvas { position: relative; min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 9px 14px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend svg { display: block; }
+#stage { overflow: auto; height: min(74vh, 720px); min-height: 340px; padding: 4px; }
+#stage svg { display: block; }
+.drop { position: absolute; inset: 0; display: none; place-items: center; background: var(--accent-soft); color: var(--accent); font-weight: 600; border: 2px dashed var(--accent); border-radius: 8px; z-index: 5; }
+body.dragging .drop { display: grid; }
+.panel { min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; max-height: min(82vh, 800px); overflow: auto; }
+.panel h2 { margin: 0; font-size: 18px; font-weight: 600; line-height: 1.25; text-wrap: balance; overflow-wrap: anywhere; }
+.chip { display: inline-block; font-family: var(--mono); font-size: 12px; font-weight: 600; background: var(--accent-soft); color: var(--accent); border-radius: 4px; padding: 2px 7px; margin-bottom: 6px; }
+.uri { font-family: var(--mono); font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; margin: 4px 0 0; }
+.flags { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 0; }
+.flag { font-size: 12px; font-weight: 500; border-radius: 99px; padding: 2px 10px; border: 1px solid var(--line-strong); }
+.flag.top { color: var(--top); background: var(--top-soft); border-color: var(--top); }
+.flag.multi { color: var(--multi); background: var(--multi-soft); border-color: var(--multi); }
+.callout { margin: 12px 0 0; padding: 10px 12px; border-radius: 6px; background: var(--multi-soft); border-left: 3px solid var(--multi); font-size: 13px; }
+.sec { margin-top: 18px; }
+.sec h3 { margin: 0 0 6px; font-size: 11.5px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+.links { display: flex; flex-wrap: wrap; gap: 6px; }
+.lk { font: inherit; font-size: 13px; color: var(--accent); background: transparent; border: 1px solid var(--line-strong); border-radius: 5px; padding: 3px 9px; cursor: pointer; text-align: left; overflow-wrap: anywhere; }
+.lk:hover { background: var(--accent-soft); border-color: var(--accent); }
+.lk b { font-family: var(--mono); font-weight: 600; margin-right: 6px; }
+.path { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 0 0 8px; font-size: 13px; }
+.path .sep { color: var(--muted); }
+dl { margin: 0; display: grid; grid-template-columns: minmax(0, 8.5rem) minmax(0, 1fr); gap: 8px 12px; }
+dt { font-family: var(--mono); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; padding-top: 1px; }
+dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+dd p { margin: 0 0 4px; }
+.lang { font-family: var(--mono); font-size: 10.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; margin-left: 6px; }
+.empty { padding: 48px 24px; text-align: center; color: var(--muted); max-width: 52ch; margin: 0 auto; }
+.empty strong { display: block; color: var(--ink); font-size: 16px; margin-bottom: 6px; }
+.hint { color: var(--muted); margin: 0; }
+/* diagram */
+.edge { fill: none; stroke: var(--line-strong); stroke-width: 1.4; }
+.edge.extra { stroke: var(--multi); stroke-dasharray: 5 4; }
+.has-sel .edge { opacity: 0.22; }
+.has-sel .edge.anc, .has-sel .edge.kid { opacity: 1; }
+.edge.anc { stroke: var(--accent); stroke-width: 2.6; }
+.edge.anc.extra { stroke: var(--multi); }
+.edge.kid { stroke: var(--accent); stroke-width: 1.8; }
+.node { cursor: pointer; outline: none; }
+.node rect.box { fill: var(--node); stroke: var(--line-strong); stroke-width: 1.2; }
+.node.top rect.box { fill: var(--top-soft); stroke: var(--top); }
+.node:hover rect.box { stroke: var(--accent); }
+.node.anc rect.box { stroke: var(--accent); }
+.node.par.mp rect.box { stroke: var(--multi); stroke-width: 2.4; }
+.node.sel rect.box { stroke: var(--accent); stroke-width: 3; fill: var(--accent-soft); }
+.node:focus-visible rect.box { stroke: var(--accent); stroke-width: 3; }
+.node .n1 { font-family: var(--mono); font-size: 13px; font-weight: 600; fill: var(--ink); }
+.node .n2 { font-family: var(--sans); font-size: 11.5px; fill: var(--muted); }
+.node .badge { fill: var(--multi); }
+.node .badge-t { font-family: var(--mono); font-size: 11px; font-weight: 600; fill: #fff; text-anchor: middle; }
+:root[data-theme="dark"] .node .badge-t { fill: #2a1306; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .node .badge-t { fill: #2a1306; } }
+@media (max-width: 860px) {
+  .main { grid-template-columns: minmax(0, 1fr); }
+  #stage { height: 58vh; }
+  .panel { max-height: none; }
+  dl { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  dd { margin-bottom: 8px; }
+}
+@media (prefers-reduced-motion: no-preference) { .edge { transition: opacity .15s, stroke .15s; } }
+
+/* page reset */
+html{color-scheme:light}
+body{margin:0}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <h1>SKOS Hierarchy Viewer</h1>
+    <p id="stats" class="muted"></p>
+  </div>
+  <div class="tools">
+    <label class="btn primary" for="file">Import .ttl</label>
+    <input type="file" id="file" accept=".ttl,.turtle,text/turtle,.txt" hidden>
+    <select id="scheme" aria-label="Concept scheme"></select>
+    <button class="btn" id="sample" type="button">Load sample</button>
+    <div class="zoom" role="group" aria-label="Zoom">
+      <button type="button" id="zout" aria-label="Zoom out">&minus;</button>
+      <button type="button" id="zfit">Fit</button>
+      <button type="button" id="zin" aria-label="Zoom in">+</button>
+    </div>
+  </div>
+</header>
+<div id="err" class="err" role="alert" hidden></div>
+<main class="main">
+  <section class="canvas" aria-label="Concept hierarchy">
+    <div class="legend" id="legend"></div>
+    <div id="stage"></div>
+    <div class="drop">Drop a .ttl file to import</div>
+  </section>
+  <aside class="panel" id="panel" aria-live="polite"></aside>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/n3@1.17.2/browser/n3.min.js"></script>
+<script>
+(function () {
+  const NS = {
+    skos: 'http://www.w3.org/2004/02/skos/core#',
+    rdf: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
+    rdfs: 'http://www.w3.org/2000/01/rdf-schema#',
+    dct: 'http://purl.org/dc/terms/',
+    owl: 'http://www.w3.org/2002/07/owl#',
+    xsd: 'http://www.w3.org/2001/XMLSchema#'
+  };
+  const S = n => NS.skos + n;
+  const RDF_TYPE = NS.rdf + 'type';
+  const $ = id => document.getElementById(id);
+  const W = 214, H = 54, CG = 78, RG = 14, PAD = 24;
+
+  const SAMPLE = `@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix dct: <http://purl.org/dc/terms/> .
+@prefix ex: <https://example.org/transport/> .
+
+ex:scheme a skos:ConceptScheme ;
+  dct:title "Transport Modes"@en ;
+  skos:hasTopConcept ex:land .
+
+ex:land a skos:Concept ; skos:inScheme ex:scheme ;
+  skos:prefLabel "Land transport"@en ; skos:altLabel "Overland travel"@en ;
+  skos:notation "T1" ;
+  skos:definition "Movement of people and goods over the ground surface."@en .
+ex:water a skos:Concept ; skos:inScheme ex:scheme ;
+  skos:prefLabel "Water transport"@en ; skos:altLabel "Maritime travel"@en ; skos:notation "T2" .
+ex:air a skos:Concept ; skos:inScheme ex:scheme ;
+  skos:prefLabel "Air transport"@en ; skos:altLabel "Aviation"@en ; skos:notation "T3" .
+
+ex:road a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:land ;
+  skos:prefLabel "Road transport"@en ; skos:altLabel "Highway travel"@en ; skos:notation "T1.1" ;
+  skos:narrower ex:trams .
+ex:rail a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:land ;
+  skos:prefLabel "Rail transport"@en ; skos:altLabel "Railways"@en ; skos:notation "T1.2" .
+ex:active a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:land ;
+  skos:prefLabel "Active travel"@en ; skos:altLabel "Non-motorised travel"@en ; skos:notation "T1.3" ;
+  skos:scopeNote "Travel powered by the traveller: walking, cycling and similar."@en .
+
+ex:cars a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:road ;
+  skos:prefLabel "Cars"@en ; skos:altLabel "Automobiles"@en ; skos:notation "T1.1.1" .
+ex:buses a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:road ;
+  skos:prefLabel "Buses"@en ; skos:altLabel "Coaches"@en ; skos:notation "T1.1.2" ;
+  skos:related ex:trams .
+ex:cycling a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:road, ex:active ;
+  skos:prefLabel "Cycling"@en ; skos:altLabel "Bicycles"@en ; skos:notation "T1.1.3" ;
+  skos:scopeNote "Has two broader concepts: it is both a road use and a form of active travel."@en .
+ex:trams a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:rail ;
+  skos:prefLabel "Trams"@en ; skos:altLabel "Streetcars"@en ; skos:notation "T1.2.1" .
+ex:metro a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:rail ;
+  skos:prefLabel "Underground rail"@en ; skos:altLabel "Metro"@en, "Subway"@en ; skos:notation "T1.2.2" .
+ex:walking a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:active ;
+  skos:prefLabel "Walking"@en ; skos:altLabel "Pedestrian travel"@en ; skos:notation "T1.3.1" .
+
+ex:ferries a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:water ;
+  skos:prefLabel "Ferries"@en ; skos:altLabel "Passenger boats"@en ; skos:notation "T2.1" .
+ex:freight a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:water ;
+  skos:prefLabel "Freight shipping"@en ; skos:altLabel "Cargo vessels"@en ; skos:notation "T2.2" .
+ex:flights a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:air ;
+  skos:prefLabel "Scheduled flights"@en ; skos:altLabel "Airline services"@en ; skos:notation "T3.1" .
+ex:heli a skos:Concept ; skos:inScheme ex:scheme ; skos:broader ex:air ;
+  skos:prefLabel "Helicopters"@en ; skos:altLabel "Rotorcraft"@en ; skos:notation "T3.2" .
+`;
+
+  let M = null, V = null, sel = null, zoom = 1, prefixes = {};
+
+  /* ---------- tiny DOM helpers ---------- */
+  function mk(ns, tag, attrs, kids) {
+    const e = ns ? document.createElementNS(ns, tag) : document.createElement(tag);
+    for (const k in attrs || {}) {
+      const v = attrs[k];
+      if (k.slice(0, 2) === 'on') e.addEventListener(k.slice(2), v);
+      else if (k === 'class' && !ns) e.className = v;
+      else e.setAttribute(k, v);
+    }
+    (kids || []).flat().forEach(c => { if (c != null) e.append(c.nodeType ? c : document.createTextNode(String(c))); });
+    return e;
+  }
+  const h = (tag, attrs, ...kids) => mk(null, tag, attrs, kids);
+  const sv = (tag, attrs, ...kids) => mk('http://www.w3.org/2000/svg', tag, attrs, kids);
+
+  /* ---------- parsing ---------- */
+  function parseTurtle(text) {
+    text = text.replace(/^﻿/, '');
+    const quads = new N3.Parser().parse(text);
+    const pfx = {};
+    const re = /(?:@prefix|PREFIX)\s+([A-Za-z][\w.-]*)?:\s*<([^>]*)>/gi;
+    let m;
+    while ((m = re.exec(text))) pfx[m[1] || ''] = m[2];
+    return { quads, pfx };
+  }
+
+  function build(quads) {
+    const subj = new Map();
+    const add = (id, p, o) => { if (!subj.has(id)) subj.set(id, []); subj.get(id).push({ p, o }); };
+    quads.forEach(q => add(q.subject.value, q.predicate.value, q.object));
+    const isType = (id, t) => (subj.get(id) || []).some(x => x.p === RDF_TYPE && x.o.value === t);
+    const concepts = new Set(), schemes = new Set();
+    for (const id of subj.keys()) {
+      if (isType(id, S('Concept'))) concepts.add(id);
+      if (isType(id, S('ConceptScheme'))) schemes.add(id);
+    }
+    const parents = new Map(), inScheme = new Map(), declaredTop = new Set();
+    const link = (child, parent) => {
+      if (child === parent) return;
+      concepts.add(child); concepts.add(parent);
+      if (!parents.has(child)) parents.set(child, new Set());
+      parents.get(child).add(parent);
+    };
+    const inSch = (c, s) => { if (!inScheme.has(c)) inScheme.set(c, new Set()); inScheme.get(c).add(s); };
+    quads.forEach(q => {
+      const s = q.subject.value, p = q.predicate.value, o = q.object;
+      if (o.termType === 'Literal') return;
+      if (p === S('broader')) link(s, o.value);
+      else if (p === S('narrower')) link(o.value, s);
+      else if (p === S('inScheme')) inSch(s, o.value);
+      else if (p === S('hasTopConcept')) { schemes.add(s); concepts.add(o.value); inSch(o.value, s); declaredTop.add(o.value); }
+      else if (p === S('topConceptOf')) { schemes.add(o.value); inSch(s, o.value); declaredTop.add(s); }
+    });
+    return { subj, concepts, schemes, parents, inScheme, declaredTop };
+  }
+
+  /* ---------- labels ---------- */
+  const props = id => (M.subj.get(id) || []);
+  const lits = (id, pred) => props(id).filter(t => t.p === pred && t.o.termType === 'Literal').map(t => t.o);
+  const pickLang = a => a.find(l => l.language === 'en') || a.find(l => !l.language) || a[0];
+  const local = id => id.split(/[#/]/).filter(Boolean).pop() || id;
+  const notation = id => { const l = lits(id, S('notation'))[0]; return l ? l.value : ''; };
+  function prefLabel(id) {
+    const l = pickLang(lits(id, S('prefLabel'))) || pickLang(lits(id, NS.rdfs + 'label')) || pickLang(lits(id, NS.dct + 'title'));
+    return l ? l.value : local(id);
+  }
+  function altLabels(id) {
+    const L = lits(id, S('altLabel'));
+    return [...L.filter(l => !l.language || l.language === 'en'), ...L.filter(l => l.language && l.language !== 'en')].map(l => l.value);
+  }
+  const sortKey = id => notation(id) || prefLabel(id);
+  const cmp = (a, b) => sortKey(a).localeCompare(sortKey(b), undefined, { numeric: true });
+  const short = (s, n) => s.length > n ? s.slice(0, n - 1) + '…' : s;
+  function qn(iri) {
+    for (const [p, ns] of Object.entries(Object.assign({}, prefixes, NS))) {
+      if (ns && iri.startsWith(ns) && iri.length > ns.length) return p + ':' + iri.slice(ns.length);
+    }
+    return '<' + iri + '>';
+  }
+  const tag = id => notation(id) || short(prefLabel(id), 20);
+
+  /* ---------- view model + layout ---------- */
+  function computeView() {
+    const sch = $('scheme').value;
+    let ids = [...M.concepts];
+    if (sch !== '*') {
+      const f = ids.filter(i => M.inScheme.get(i) && M.inScheme.get(i).has(sch));
+      if (f.length) ids = f;
+    }
+    ids.sort(cmp);
+    const set = new Set(ids);
+    const parents = new Map(), kids = new Map();
+    ids.forEach(i => { parents.set(i, []); kids.set(i, []); });
+    for (const [c, ps] of M.parents) {
+      if (!set.has(c)) continue;
+      for (const p of ps) if (set.has(p)) { parents.get(c).push(p); kids.get(p).push(c); }
+    }
+    ids.forEach(i => { parents.get(i).sort(cmp); kids.get(i).sort(cmp); });
+    const tops = ids.filter(i => !parents.get(i).length);
+
+    const rank = new Map(), guard = new Set();
+    const rk = n => {
+      if (rank.has(n)) return rank.get(n);
+      if (guard.has(n)) return 0;
+      guard.add(n);
+      let v = 0;
+      for (const p of parents.get(n)) v = Math.max(v, rk(p) + 1);
+      guard.delete(n); rank.set(n, v); return v;
+    };
+    ids.forEach(rk);
+
+    const primary = new Map(), yy = new Map(), seen = new Set();
+    let slot = 0;
+    const place = n => {
+      seen.add(n);
+      const ch = [];
+      for (const k of kids.get(n)) {
+        if (seen.has(k)) continue;
+        primary.set(k, n); place(k); ch.push(k);
+      }
+      yy.set(n, ch.length ? (yy.get(ch[0]) + yy.get(ch[ch.length - 1])) / 2 : slot++);
+    };
+    tops.forEach(place);
+    ids.forEach(n => { if (!seen.has(n)) place(n); });
+
+    const pos = new Map();
+    let maxX = 0, maxY = 0;
+    ids.forEach(n => {
+      const x = PAD + rank.get(n) * (W + CG), y = PAD + yy.get(n) * (H + RG);
+      pos.set(n, { x, y });
+      maxX = Math.max(maxX, x + W); maxY = Math.max(maxY, y + H);
+    });
+    return { ids, set, parents, kids, tops, primary, pos, w: maxX + PAD, h: maxY + PAD };
+  }
+
+  /* ---------- diagram ---------- */
+  function draw() {
+    const stage = $('stage');
+    stage.textContent = '';
+    if (!V.ids.length) {
+      stage.append(h('div', { class: 'empty' }, h('strong', {}, 'No concepts found'),
+        'This file has no skos:Concept resources or skos:broader / skos:narrower links.'));
+      return;
+    }
+    const svg = sv('svg', { id: 'dia', viewBox: `0 0 ${V.w} ${V.h}`, role: 'group', 'aria-label': 'Concept hierarchy diagram' });
+    const eg = sv('g', {}), ng = sv('g', {});
+    svg.append(eg, ng);
+    for (const c of V.ids) {
+      for (const p of V.parents.get(c)) {
+        const a = V.pos.get(p), b = V.pos.get(c);
+        const x1 = a.x + W, y1 = a.y + H / 2, x2 = b.x, y2 = b.y + H / 2;
+        const dx = Math.max(30, (x2 - x1) / 2);
+        eg.append(sv('path', {
+          class: 'edge' + (V.parents.get(c).length > 1 ? ' extra' : ''),
+          d: `M${x1} ${y1} C${x1 + dx} ${y1} ${x2 - dx} ${y2} ${x2} ${y2}`,
+          'data-p': p, 'data-c': c
+        }));
+      }
+    }
+    for (const id of V.ids) {
+      const { x, y } = V.pos.get(id);
+      const np = V.parents.get(id).length;
+      const alts = altLabels(id), nt = notation(id);
+      const l1 = nt || prefLabel(id);
+      let l2 = alts.length ? alts[0] + (alts.length > 1 ? '  +' + (alts.length - 1) : '') : (nt ? prefLabel(id) : '');
+      const g = sv('g', {
+        class: 'node' + (V.tops.includes(id) ? ' top' : ''), transform: `translate(${x} ${y})`,
+        'data-id': id, tabindex: '0', role: 'button',
+        'aria-label': `${l1}${l2 ? ', ' + l2 : ''}${np > 1 ? ', ' + np + ' parents' : ''}`
+      });
+      g.append(sv('title', {}, prefLabel(id) + (nt ? ' (' + nt + ')' : '')));
+      g.append(sv('rect', { class: 'box', width: W, height: H, rx: 6 }));
+      g.append(sv('text', { class: 'n1', x: 14, y: 23 }, short(l1, 24)));
+      if (l2) g.append(sv('text', { class: 'n2', x: 14, y: 40 }, short(l2, 32)));
+      if (np > 1) {
+        g.append(sv('circle', { class: 'badge', cx: W - 2, cy: 2, r: 10 }));
+        g.append(sv('text', { class: 'badge-t', x: W - 2, y: 6 }, String(np)));
+      }
+      ng.append(g);
+    }
+    svg.addEventListener('click', e => { const n = e.target.closest('.node'); if (n) select(n.getAttribute('data-id')); });
+    svg.addEventListener('keydown', e => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const n = e.target.closest && e.target.closest('.node');
+      if (n) { e.preventDefault(); select(n.getAttribute('data-id')); }
+    });
+    stage.append(svg);
+    applyZoom();
+    paintSelection();
+  }
+
+  function applyZoom() {
+    const svg = $('dia');
+    if (!svg) return;
+    svg.setAttribute('width', Math.round(V.w * zoom));
+    svg.setAttribute('height', Math.round(V.h * zoom));
+  }
+  function setZoom(z) { zoom = Math.max(0.3, Math.min(2, z)); applyZoom(); }
+  function fit() {
+    const st = $('stage');
+    setZoom(Math.min(1, (st.clientWidth - 12) / V.w, (st.clientHeight - 12) / V.h));
+  }
+
+  function ancestors(id) {
+    const out = new Set(), q = [id];
+    while (q.length) {
+      const n = q.pop();
+      for (const p of V.parents.get(n) || []) if (!out.has(p)) { out.add(p); q.push(p); }
+    }
+    return out;
+  }
+
+  function paintSelection() {
+    const svg = $('dia');
+    if (!svg) return;
+    svg.classList.toggle('has-sel', !!sel && V.set.has(sel));
+    const active = sel && V.set.has(sel);
+    const anc = active ? ancestors(sel) : new Set();
+    const direct = active ? new Set(V.parents.get(sel)) : new Set();
+    const mp = active && direct.size > 1;
+    svg.querySelectorAll('.node').forEach(n => {
+      const id = n.getAttribute('data-id');
+      n.classList.toggle('sel', id === sel);
+      n.classList.toggle('anc', anc.has(id));
+      n.classList.toggle('par', direct.has(id));
+      n.classList.toggle('mp', mp);
+    });
+    svg.querySelectorAll('.edge').forEach(e => {
+      const p = e.getAttribute('data-p'), c = e.getAttribute('data-c');
+      e.classList.toggle('anc', active && (c === sel || anc.has(c)) && anc.has(p));
+      e.classList.toggle('kid', active && p === sel);
+    });
+  }
+
+  function select(id, scroll) {
+    sel = id;
+    paintSelection();
+    renderPanel();
+    if (scroll && V.pos.has(id)) {
+      const st = $('stage'), p = V.pos.get(id);
+      st.scrollTo({ left: Math.max(0, p.x * zoom - st.clientWidth / 3), top: Math.max(0, p.y * zoom - st.clientHeight / 2), behavior: 'smooth' });
+    }
+  }
+
+  /* ---------- detail panel ---------- */
+  const ORDER = ['prefLabel', 'altLabel', 'hiddenLabel', 'notation', 'definition', 'scopeNote', 'note', 'example', 'historyNote', 'editorialNote', 'changeNote', 'related', 'exactMatch', 'closeMatch', 'broadMatch', 'narrowMatch', 'relatedMatch', 'inScheme', 'topConceptOf'].map(S);
+
+  function conceptBtn(id) {
+    const nt = notation(id);
+    return h('button', { class: 'lk', type: 'button', onclick: () => select(id, true) }, nt ? h('b', {}, nt) : null, prefLabel(id));
+  }
+
+  function pathsToTop(id) {
+    const out = [];
+    const walk = (n, trail, seen) => {
+      if (out.length >= 8) return;
+      const ps = V.parents.get(n) || [];
+      if (!ps.length) { out.push([n, ...trail]); return; }
+      for (const p of ps) if (!seen.has(p)) walk(p, [n, ...trail], new Set([...seen, p]));
+    };
+    walk(id, [], new Set([id]));
+    return out;
+  }
+
+  function valueNode(t) {
+    if (t.termType === 'Literal') {
+      const p = h('p', {}, t.value);
+      if (t.language) p.append(h('span', { class: 'lang' }, t.language));
+      else if (t.datatype && t.datatype.value !== NS.xsd + 'string') p.append(h('span', { class: 'lang' }, qn(t.datatype.value)));
+      return p;
+    }
+    if (t.termType === 'BlankNode') return h('p', {}, '_:' + t.value);
+    if (M.concepts.has(t.value)) return h('p', {}, conceptBtn(t.value));
+    return h('p', {}, h('span', { class: 'uri' }, qn(t.value)));
+  }
+
+  function renderPanel() {
+    const P = $('panel');
+    P.textContent = '';
+    if (!sel || !M.concepts.has(sel)) {
+      P.append(h('p', { class: 'hint' }, 'Select a concept in the diagram to see its full record, its broader and narrower concepts and every route up to a top concept.'));
+      return;
+    }
+    const id = sel, nt = notation(id);
+    const inV = V.set.has(id);
+    const ps = inV ? V.parents.get(id) : [], ks = inV ? V.kids.get(id) : [];
+    const isTop = inV && !ps.length;
+    if (nt) P.append(h('span', { class: 'chip' }, nt));
+    P.append(h('h2', {}, prefLabel(id)));
+    P.append(h('p', { class: 'uri' }, id));
+
+    const flags = h('div', { class: 'flags' });
+    if (isTop) flags.append(h('span', { class: 'flag top' }, M.declaredTop.has(id) ? 'Top concept (declared)' : 'Top concept (inferred)'));
+    else if (M.declaredTop.has(id)) flags.append(h('span', { class: 'flag' }, 'Declared top concept, but has a broader concept'));
+    if (ps.length > 1) flags.append(h('span', { class: 'flag multi' }, ps.length + ' parents'));
+    if (flags.children.length) P.append(flags);
+
+    if (ps.length > 1) {
+      P.append(h('div', { class: 'callout' }, `This concept sits under ${ps.length} broader concepts, so it is reachable by ${ps.length} routes. The diagram highlights each route, and every link into this concept is drawn dashed.`));
+    }
+
+    const hier = h('div', { class: 'sec' }, h('h3', {}, 'Hierarchy'));
+    if (ps.length) {
+      hier.append(h('p', { class: 'muted', style: 'margin:0 0 4px;font-size:12.5px' }, 'Broader (' + ps.length + ')'));
+      hier.append(h('div', { class: 'links', style: 'margin-bottom:10px' }, ps.map(conceptBtn)));
+    }
+    if (ks.length) {
+      hier.append(h('p', { class: 'muted', style: 'margin:0 0 4px;font-size:12.5px' }, 'Narrower (' + ks.length + ')'));
+      hier.append(h('div', { class: 'links' }, ks.map(conceptBtn)));
+    }
+    if (!ps.length && !ks.length) hier.append(h('p', { class: 'hint' }, 'No broader or narrower links in this view.'));
+    P.append(hier);
+
+    if (inV && ps.length) {
+      const sec = h('div', { class: 'sec' }, h('h3', {}, pathsToTop(id).length > 1 ? 'Routes to the top' : 'Route to the top'));
+      pathsToTop(id).forEach(path => {
+        const row = h('div', { class: 'path' });
+        path.forEach((n, i) => {
+          if (i) row.append(h('span', { class: 'sep' }, '›'));
+          row.append(n === id ? h('strong', {}, tag(n)) : h('button', { class: 'lk', type: 'button', onclick: () => select(n, true) }, tag(n)));
+        });
+        sec.append(row);
+      });
+      P.append(sec);
+    }
+
+    const groups = new Map();
+    props(id).forEach(t => {
+      if (t.p === S('broader') || t.p === S('narrower')) return;
+      if (!groups.has(t.p)) groups.set(t.p, []);
+      groups.get(t.p).push(t.o);
+    });
+    const preds = [...groups.keys()].sort((a, b) => {
+      const ra = a === RDF_TYPE ? 999 : ORDER.indexOf(a) < 0 ? 500 : ORDER.indexOf(a);
+      const rb = b === RDF_TYPE ? 999 : ORDER.indexOf(b) < 0 ? 500 : ORDER.indexOf(b);
+      return ra - rb || qn(a).localeCompare(qn(b));
+    });
+    const dl = h('dl', {});
+    preds.forEach(p => {
+      dl.append(h('dt', {}, qn(p)));
+      dl.append(h('dd', {}, groups.get(p).map(valueNode)));
+    });
+    P.append(h('div', { class: 'sec' }, h('h3', {}, 'All properties'), dl));
+  }
+
+  /* ---------- scheme list, stats, legend ---------- */
+  function fillSchemes(keep) {
+    const s = $('scheme');
+    s.textContent = '';
+    s.append(h('option', { value: '*' }, 'All concepts'));
+    [...M.schemes].forEach(id => s.append(h('option', { value: id }, 'Scheme: ' + prefLabel(id))));
+    s.value = keep && [...s.options].some(o => o.value === keep) ? keep : '*';
+    if (M.schemes.size === 1 && !keep) s.value = [...M.schemes][0];
+  }
+  function stats() {
+    const multi = V.ids.filter(i => V.parents.get(i).length > 1).length;
+    $('stats').textContent = V.ids.length + ' concepts · ' + V.tops.length + ' top concept' + (V.tops.length === 1 ? '' : 's') +
+      ' (inferred) · ' + multi + ' with several parents';
+  }
+  function legend() {
+    const L = $('legend');
+    L.textContent = '';
+    const sw = (kids, label) => h('span', {}, sv('svg', { width: 26, height: 16, viewBox: '0 0 26 16' }, ...kids), label);
+    L.append(
+      sw([sv('rect', { x: 1, y: 2, width: 24, height: 12, rx: 3, fill: 'var(--top-soft)', stroke: 'var(--top)', 'stroke-width': 1.4 })], 'Top concept'),
+      sw([sv('circle', { cx: 13, cy: 8, r: 7, fill: 'var(--multi)' })], 'Badge = number of parents'),
+      sw([sv('path', { d: 'M1 8 H25', stroke: 'var(--line-strong)', 'stroke-width': 1.6 })], 'Only one route to the concept'),
+      sw([sv('path', { d: 'M1 8 H25', stroke: 'var(--multi)', 'stroke-width': 1.6, 'stroke-dasharray': '5 4' })], 'Several routes (concept has multiple parents)')
+    );
+  }
+
+  /* ---------- loading ---------- */
+  function showError(msg) { const e = $('err'); e.textContent = msg; e.hidden = !msg; }
+
+  function load(text, label) {
+    try {
+      const r = parseTurtle(text);
+      prefixes = {};
+      for (const k in r.pfx) prefixes[k] = typeof r.pfx[k] === 'string' ? r.pfx[k] : r.pfx[k].value;
+      M = build(r.quads);
+    } catch (err) {
+      showError('Could not read ' + (label || 'that file') + ' as Turtle: ' + (err && err.message ? err.message : err));
+      return;
+    }
+    showError('');
+    sel = null; zoom = 1;
+    fillSchemes();
+    refresh();
+  }
+  function refresh() {
+    V = computeView();
+    stats();
+    draw();
+    renderPanel();
+    if (V.w > $('stage').clientWidth) fit();
+  }
+  function readFile(f) {
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => load(String(r.result), f.name);
+    r.onerror = () => showError('Could not read ' + f.name + '.');
+    r.readAsText(f);
+  }
+
+  $('file').addEventListener('change', e => { readFile(e.target.files[0]); e.target.value = ''; });
+  $('sample').addEventListener('click', () => load(SAMPLE, 'the sample'));
+  $('scheme').addEventListener('change', () => { sel = null; refresh(); });
+  $('zin').addEventListener('click', () => setZoom(zoom + 0.15));
+  $('zout').addEventListener('click', () => setZoom(zoom - 0.15));
+  $('zfit').addEventListener('click', () => V && fit());
+  let dragDepth = 0;
+  window.addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; document.body.classList.add('dragging'); });
+  window.addEventListener('dragleave', () => { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) document.body.classList.remove('dragging'); });
+  window.addEventListener('dragover', e => e.preventDefault());
+  window.addEventListener('drop', e => {
+    e.preventDefault(); dragDepth = 0; document.body.classList.remove('dragging');
+    readFile(e.dataTransfer && e.dataTransfer.files[0]);
+  });
+
+  legend();
+  load(SAMPLE, 'the sample');
+})();
+</script>
+</body>
+</html>
